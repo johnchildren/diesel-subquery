@@ -111,7 +111,7 @@ impl<S2, Query> AsSubquery<S2, Query> for Query {
 
 #[cfg(test)]
 mod tests {
-    use diesel::{debug_query, dsl::Select, pg::Pg, QueryDsl};
+    use diesel::{debug_query, dsl::Select, pg::Pg, ExpressionMethods, QueryDsl};
 
     use crate::SubqueryProjection;
 
@@ -158,7 +158,10 @@ mod tests {
         }
 
         impl<DB: Backend> QueryFragment<DB> for id {
-            fn walk_ast<'b>(&'b self, mut pass: diesel::query_builder::AstPass<'_, 'b, DB>) -> diesel::QueryResult<()> {
+            fn walk_ast<'b>(
+                &'b self,
+                mut pass: diesel::query_builder::AstPass<'_, 'b, DB>,
+            ) -> diesel::QueryResult<()> {
                 pass.push_identifier("id")
             }
         }
@@ -193,9 +196,14 @@ mod tests {
             "(SELECT \"foo\".\"id\", \"foo\".\"name\" FROM \"foo\") AS \"bar\" -- binds: []"
         );
 
-        let query = sub_query.select((bar::id,));
+        let query = sub_query.clone().select((bar::id,));
         let query_string = debug_query::<Pg, _>(&query).to_string();
 
         assert_eq!(query_string, "SELECT \"id\" FROM (SELECT \"foo\".\"id\", \"foo\".\"name\" FROM \"foo\") AS \"bar\" -- binds: []");
+
+        let query = sub_query.filter(bar::id.eq(24));
+        let query_string = debug_query::<Pg, _>(&query).to_string();
+
+        assert_eq!(query_string, "SELECT \"id\" FROM (SELECT \"foo\".\"id\", \"foo\".\"name\" FROM \"foo\") AS \"bar\" WHERE (\"id\" = $1) -- binds: [24]");
     }
 }
